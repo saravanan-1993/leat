@@ -1,0 +1,300 @@
+const { prisma } = require('../../config/database');
+
+/**
+ * Add item to wishlist
+ * POST /api/online/wishlist
+ */
+const addToWishlist = async (req, res) => {
+  try {
+    const { userId, productId, productData } = req.body;
+
+    if (!userId || !productId || !productData) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID, product ID, and product data are required",
+      });
+    }
+
+    // Find customer
+    const customer = await prisma.customer.findUnique({
+      where: { userId },
+    });
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        error: "Customer not found. Please ensure user is registered.",
+      });
+    }
+
+    // Check if item already exists
+    const existingItem = await prisma.wishlistItem.findFirst({
+      where: {
+        customerId: customer.id,
+        productId,
+      },
+    });
+
+    if (existingItem) {
+      return res.status(409).json({
+        success: false,
+        error: "Product already in wishlist",
+        data: {
+          wishlistItemId: existingItem.id,
+          addedAt: existingItem.addedAt,
+          ...existingItem.productData,
+        },
+      });
+    }
+
+    // Add to wishlist
+    const wishlistItem = await prisma.wishlistItem.create({
+      data: {
+        customerId: customer.id,
+        productId,
+        productData,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Product added to wishlist",
+      data: {
+        wishlistItemId: wishlistItem.id,
+        addedAt: wishlistItem.addedAt,
+        ...wishlistItem.productData,
+      },
+    });
+  } catch (error) {
+    console.error("Add to wishlist error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to add to wishlist",
+      message: error.message,
+    });
+  }
+};
+
+/**
+ * Remove item from wishlist
+ * DELETE /api/online/wishlist/:productId
+ */
+const removeFromWishlist = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID is required",
+      });
+    }
+
+    // Find customer
+    const customer = await prisma.customer.findUnique({
+      where: { userId },
+    });
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        error: "Customer not found",
+      });
+    }
+
+    // Remove from wishlist
+    const result = await prisma.wishlistItem.deleteMany({
+      where: {
+        customerId: customer.id,
+        productId,
+      },
+    });
+
+    if (result.count === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "Product not found in wishlist",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Product removed from wishlist",
+    });
+  } catch (error) {
+    console.error("Remove from wishlist error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to remove from wishlist",
+      message: error.message,
+    });
+  }
+};
+
+/**
+ * Clear entire wishlist
+ * DELETE /api/online/wishlist
+ */
+const clearWishlist = async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID is required",
+      });
+    }
+
+    // Find customer
+    const customer = await prisma.customer.findUnique({
+      where: { userId },
+    });
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        error: "Customer not found",
+      });
+    }
+
+    // Clear wishlist
+    const result = await prisma.wishlistItem.deleteMany({
+      where: {
+        customerId: customer.id,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "Wishlist cleared successfully",
+      data: {
+        removedCount: result.count,
+      },
+    });
+  } catch (error) {
+    console.error("Clear wishlist error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to clear wishlist",
+      message: error.message,
+    });
+  }
+};
+
+/**
+ * Get wishlist
+ * GET /api/online/wishlist
+ */
+const getWishlist = async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID is required",
+      });
+    }
+
+    // Find customer
+    const customer = await prisma.customer.findUnique({
+      where: { userId },
+      include: {
+        wishlistItems: {
+          orderBy: { addedAt: "desc" },
+        },
+      },
+    });
+
+    if (!customer) {
+      return res.json({
+        success: true,
+        data: [],
+      });
+    }
+
+    // Extract product data from wishlist items
+    const wishlistProducts = customer.wishlistItems.map((item) => ({
+      wishlistItemId: item.id,
+      addedAt: item.addedAt,
+      ...item.productData,
+    }));
+
+    res.json({
+      success: true,
+      data: wishlistProducts,
+    });
+  } catch (error) {
+    console.error("Get wishlist error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to get wishlist",
+      message: error.message,
+    });
+  }
+};
+
+/**
+ * Check if product is in wishlist
+ * GET /api/online/wishlist/check/:productId
+ */
+const checkWishlistItem = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID is required",
+      });
+    }
+
+    // Find customer
+    const customer = await prisma.customer.findUnique({
+      where: { userId },
+    });
+
+    if (!customer) {
+      return res.json({
+        success: true,
+        data: {
+          isInWishlist: false,
+        },
+      });
+    }
+
+    // Check if item exists
+    const item = await prisma.wishlistItem.findFirst({
+      where: {
+        customerId: customer.id,
+        productId,
+      },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        isInWishlist: !!item,
+        wishlistItemId: item?.id,
+      },
+    });
+  } catch (error) {
+    console.error("Check wishlist item error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to check wishlist item",
+      message: error.message,
+    });
+  }
+};
+
+module.exports = {
+  addToWishlist,
+  removeFromWishlist,
+  clearWishlist,
+  getWishlist,
+  checkWishlistItem,
+};

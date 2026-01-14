@@ -1,0 +1,375 @@
+const { prisma } = require('../../config/database');
+const { generateInvoicePDF, getCompanyData } = require('../../utils/order/invoicePDFGenerator');
+
+/**
+ * Get all online orders with filters and pagination
+ * GET /api/online/admin/orders
+ */
+const getAllOrders = async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 20, 
+      status, 
+      paymentStatus,
+      paymentMethod,
+      search,
+      startDate,
+      endDate,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = parseInt(limit);
+
+    // Build filter conditions
+    const where = {};
+
+    if (status) {
+      where.orderStatus = status;
+    }
+
+    if (paymentStatus) {
+      where.paymentStatus = paymentStatus;
+    }
+
+    if (paymentMethod) {
+      where.paymentMethod = paymentMethod;
+    }
+
+    if (search) {
+      where.OR = [
+        { orderNumber: { contains: search, mode: 'insensitive' } },
+        { customerName: { contains: search, mode: 'insensitive' } },
+        { customerEmail: { contains: search, mode: 'insensitive' } },
+        { customerPhone: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) {
+        where.createdAt.gte = new Date(startDate);
+      }
+      if (endDate) {
+        where.createdAt.lte = new Date(endDate);
+      }
+    }
+
+    // Get orders with pagination
+    const [orders, total] = await Promise.all([
+      prisma.onlineOrder.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { [sortBy]: sortOrder },
+        select: {
+          id: true,
+          orderNumber: true,
+          invoiceNumber: true,
+          customerName: true,
+          customerEmail: true,
+          customerPhone: true,
+          items: true,
+          subtotal: true,
+          tax: true,
+          discount: true,
+          couponDiscount: true,
+          shippingCharge: true,
+          total: true,
+          paymentMethod: true,
+          paymentStatus: true,
+          orderStatus: true,
+          createdAt: true,
+          updatedAt: true,
+          confirmedAt: true,
+          shippedAt: true,
+          deliveredAt: true,
+          cancelledAt: true,
+        }
+      }),
+      prisma.onlineOrder.count({ where })
+    ]);
+
+    // Calculate summary statistics
+    const summary = await prisma.onlineOrder.aggregate({
+      where,
+      _sum: {
+        total: true,
+      },
+      _count: {
+        id: true,
+      }
+    });
+
+    res.json({
+      success: true,
+      data: orders,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+      },
+      summary: {
+        totalOrders: summary._count.id,
+        totalRevenue: summary._sum.total || 0,
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch orders',
+      message: error.message
+    });
+  }
+};
+
+/**
+ * Get single order by ID
+ * GET /api/online/admin/orders/:id
+ */
+const getOrderById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const order = await prisma.onlineOrder.findUnique({
+      where: { id },
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: order
+    });
+  } catch (error) {
+    console.error('Error fetching order:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch order',
+      message: error.message
+    });
+  }
+};
+
+/**
+ * Update order status
+ * PATCH /api/online/admin/orders/:id/status
+ */
+const updateOrderStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['pending', 'confirmed', 'packing', 'shipped', 'delivered', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+      });
+    }
+
+    const order = await prisma.onlineOrder.findUnique({
+      where: { id }
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+
+    // Prepare update data
+    const updateData = {
+      orderStatus: status,
+    };
+
+    // Set timestamp based on status
+    const now = new Date();
+    if (status === 'confirmed' && !order.confirmedAt) {
+      updateData.confirmedAt = now;
+    } else if (status === 'packing' && !order.packingAt) {
+      updateData.packingAt = now;
+    } else if (status === 'shipped' && !order.shippedAt) {
+      updateData.shippedAt = now;
+    } else if (status === 'delivered' && !order.deliveredAt) {
+      updateData.deliveredAt = now;
+    } else if (status === 'cancelled' && !order.cancelledAt) {
+      updateData.cancelledAt = now;
+    }
+
+    // Update order
+    const updatedOrder = await prisma.onlineOrder.update({
+      where: { id },
+      data: updateData
+    });
+
+    res.json({
+      success: true,
+      data: updatedOrder,
+      message: `Order status updated to ${status}`
+    });
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update order status',
+      message: error.message
+    });
+  }
+};
+
+/**
+ * Get order statistics
+ * GET /api/online/admin/orders/stats
+ */
+const getOrderStats = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const where = {};
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
+    }
+
+    // Get counts by status
+    const statusCounts = await prisma.onlineOrder.groupBy({
+      by: ['orderStatus'],
+      where,
+      _count: {
+        id: true,
+      },
+      _sum: {
+        total: true,
+      }
+    });
+
+    // Get counts by payment status
+    const paymentCounts = await prisma.onlineOrder.groupBy({
+      by: ['paymentStatus'],
+      where,
+      _count: {
+        id: true,
+      }
+    });
+
+    // Get total revenue
+    const revenue = await prisma.onlineOrder.aggregate({
+      where: {
+        ...where,
+        paymentStatus: 'completed',
+      },
+      _sum: {
+        total: true,
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        byStatus: statusCounts.reduce((acc, item) => {
+          acc[item.orderStatus] = {
+            count: item._count.id,
+            revenue: item._sum.total || 0,
+          };
+          return acc;
+        }, {}),
+        byPaymentStatus: paymentCounts.reduce((acc, item) => {
+          acc[item.paymentStatus] = item._count.id;
+          return acc;
+        }, {}),
+        totalRevenue: revenue._sum.total || 0,
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching order stats:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch order statistics',
+      message: error.message
+    });
+  }
+};
+
+/**
+ * Download order invoice PDF (Admin)
+ * GET /api/online/admin/orders/:orderNumber/invoice/download
+ */
+const downloadOrderInvoice = async (req, res) => {
+  try {
+    const { orderNumber } = req.params;
+
+    console.log(`📄 Admin invoice download requested for order: ${orderNumber}`);
+
+    // Find the order by order number
+    const order = await prisma.onlineOrder.findFirst({
+      where: {
+        orderNumber: orderNumber
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    console.log(`📄 Order found: ${order.orderNumber}, Status: ${order.orderStatus}`);
+
+    // Get company data
+    const companyData = await getCompanyData();
+
+    // Prepare order data for PDF generation
+    const orderData = {
+      ...order,
+      items: order.items || [],
+      deliveryAddress: order.deliveryAddress || {},
+      createdAt: order.createdAt,
+      invoiceNumber: order.invoiceNumber || order.orderNumber
+    };
+
+    console.log(`📄 Generating PDF for admin download: ${orderNumber}`);
+
+    // Generate PDF
+    const pdfBuffer = await generateInvoicePDF(orderData, companyData);
+
+    console.log(`📄 PDF generated successfully for admin download: ${orderNumber}`);
+
+    // Set response headers for PDF download
+    const filename = `invoice-${orderNumber}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    // Send PDF buffer
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error('Error generating admin invoice PDF:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate invoice PDF',
+      error: error.message
+    });
+  }
+};
+
+module.exports = {
+  getAllOrders,
+  getOrderById,
+  updateOrderStatus,
+  getOrderStats,
+  downloadOrderInvoice,
+};
