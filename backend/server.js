@@ -51,6 +51,23 @@ app.use((req, res, next) => {
   next();
 });
 
+// Root route - Backend status
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Monolith E-Commerce Backend is running',
+    version: '1.0.0',
+    architecture: 'monolith',
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    endpoints: {
+      api: '/api',
+      health: '/api/health',
+      docs: 'All API routes are prefixed with /api'
+    }
+  });
+});
+
 // Mount routes with /api prefix
 app.use('/api', routes);
 
