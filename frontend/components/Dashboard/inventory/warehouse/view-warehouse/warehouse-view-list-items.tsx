@@ -364,26 +364,27 @@ export default function WarehouseViewListItems({
       </div>
 
       {/* Table Section */}
-      <div className="border rounded-lg overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Image</TableHead>
-              <TableHead>SKU</TableHead>
-              <TableHead>Item Name</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>UOM</TableHead>
-              <TableHead className="text-right">Purchase Price</TableHead>
-              <TableHead className="text-center">GST %</TableHead>
-              <TableHead className="text-right">Price + GST</TableHead>
-              <TableHead>HSN Code</TableHead>
-              <TableHead className="text-right">Opening Stock</TableHead>
-              <TableHead className="text-right">Current Qty</TableHead>
-              <TableHead className="text-right">Low Stock Alert</TableHead>
-              <TableHead>Expiry Date</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
+      <div className="border rounded-lg w-full">
+        <div className="overflow-x-auto w-full">
+          <Table className="min-w-max">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[60px]">Image</TableHead>
+                <TableHead className="w-[100px]">SKU</TableHead>
+                <TableHead className="w-[200px]">Item Name</TableHead>
+                <TableHead className="w-[120px]">Category</TableHead>
+                <TableHead className="w-[70px]">UOM</TableHead>
+                <TableHead className="text-right w-[110px]">Purchase Price</TableHead>
+                <TableHead className="text-center w-[70px]">GST %</TableHead>
+                <TableHead className="text-right w-[110px]">Price + GST</TableHead>
+                <TableHead className="w-[100px]">HSN Code</TableHead>
+                <TableHead className="text-right w-[100px]">Opening Stock</TableHead>
+                <TableHead className="text-right w-[90px]">Current Qty</TableHead>
+                <TableHead className="text-right w-[100px]">Low Stock Alert</TableHead>
+                <TableHead className="w-[110px]">Expiry Date</TableHead>
+                <TableHead className="w-[130px]">Status</TableHead>
+              </TableRow>
+            </TableHeader>
           <TableBody>
             {currentItems.length === 0 ? (
               <TableRow>
@@ -459,10 +460,10 @@ export default function WarehouseViewListItems({
                       {item.itemCode || "-"}
                     </TableCell>
                     <TableCell>
-                      <div className="min-w-[180px]">
-                        <div className="font-medium">{item.itemName}</div>
+                      <div className="w-[200px]">
+                        <div className="font-medium truncate">{item.itemName}</div>
                         {item.description && (
-                          <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                          <div className="text-xs text-muted-foreground line-clamp-2 mt-1 overflow-hidden text-ellipsis">
                             {item.description}
                           </div>
                         )}
@@ -566,7 +567,8 @@ export default function WarehouseViewListItems({
               })
             )}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
       </div>
 
       {/* Pagination */}
