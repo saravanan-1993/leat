@@ -431,17 +431,26 @@ export const PosProductsList = () => {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="font-medium">
+                  <TableCell className="font-medium max-w-xs">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold">{product.itemName}</span>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="font-semibold line-clamp-1 cursor-help">{product.itemName}</span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-2xl">
+                              <p className="whitespace-normal">{product.itemName}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         {product._source === 'inventory' && (
-                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 flex-shrink-0">
                             From Inventory
                           </Badge>
                         )}
                         {product._source === 'pos' && (
-                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 flex-shrink-0">
                             Customized
                           </Badge>
                         )}
@@ -454,8 +463,8 @@ export const PosProductsList = () => {
                                 {product.description}
                               </div>
                             </TooltipTrigger>
-                            <TooltipContent className="max-w-md">
-                              <p>{product.description}</p>
+                            <TooltipContent className="max-w-2xl">
+                              <p className="whitespace-normal">{product.description}</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
