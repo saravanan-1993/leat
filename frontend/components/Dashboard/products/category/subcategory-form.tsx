@@ -107,6 +107,10 @@ export const SubcategoryForm = ({ id }: { id?: string }) => {
       toast.error("Category and Subcategory name are required");
       return;
     }
+    if (!subcategoryImage && !existingSubcategoryImage) {
+      toast.error("Please upload a subcategory image");
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -212,7 +216,7 @@ export const SubcategoryForm = ({ id }: { id?: string }) => {
         </div>
 
         <div className="space-y-2">
-          <Label>Subcategory Image</Label>
+          <Label>Subcategory Image <span className="text-red-500">*</span></Label>
           <FileUpload
             currentFile={subcategoryImage}
             onUploadSuccess={(file) => setSubcategoryImage(file)}

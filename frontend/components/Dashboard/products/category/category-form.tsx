@@ -136,14 +136,21 @@ export const CategoryForm = ({ id }: { id?: string }) => {
   };
 
   const validateForm = () => {
-    return formData.categoryName.trim() !== "";
+    if (formData.categoryName.trim() === "") {
+      toast.error("Please enter a category name");
+      return false;
+    }
+    if (!categoryImage && !existingCategoryImage) {
+      toast.error("Please upload a category image");
+      return false;
+    }
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
-      toast.error("Please enter a category name");
       return;
     }
 
@@ -269,7 +276,7 @@ export const CategoryForm = ({ id }: { id?: string }) => {
             <div>
               <Label className="text-base font-semibold flex items-center gap-2">
                 <ImageIcon className="h-4 w-4" />
-                Category Image
+                Category Image <span className="text-red-500">*</span>
               </Label>
               <div className="mt-2">
                 <FileUpload
